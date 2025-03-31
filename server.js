@@ -1,3 +1,10 @@
+// Make sure this is at the top of your server.js
+const cors = require('cors');
+app.use(cors({
+  origin: '*',  // For development; in production, specify your Netlify domain
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 const express = require('express');
 const cors = require('cors');
 const ytdl = require('ytdl-core');
@@ -5,7 +12,9 @@ const fs = require('fs');
 const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
-
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
 // Store downloads in memory
 const downloads = {};
 
@@ -37,6 +46,12 @@ app.get('https://home-jrcv.onrender.com/video-info', async (req, res) => {
     }
     
     console.log(`Getting info for: ${url}`);
+    
+    // Rest of the code...
+  } catch (error) {
+    // Error handling...
+  }
+});
     
     // Validate YouTube URL
     if (!ytdl.validateURL(url)) {
