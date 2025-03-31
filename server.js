@@ -1,6 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-const youtubedl = require('youtube-dl-exec');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -16,76 +15,27 @@ app.get('/', (req, res) => {
   res.json({ message: 'YouTube Downloader API is running' });
 });
 
-// Video info endpoint
-app.get('/api/video-info', async (req, res) => {
-  try {
-    const { url } = req.query;
-    
-    if (!url) {
-      return res.status(400).json({ error: 'URL is required' });
+// Video info endpoint with mock data
+app.get('/api/video-info', (req, res) => {
+  // Just return mock data regardless of the URL
+  const mockData = {
+    title: 'Sample YouTube Video',
+    description: 'This is a sample description for a YouTube video. It demonstrates how the YouTube downloader would display information.',
+    thumbnail: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg',
+    format_options: {
+      video: {
+        mp4: ['1080p', '720p', '480p', '360p', '240p']
+      }
     }
-    
-    console.log(`Getting info for: ${url}`);
-    
-    // Use youtube-dl to get video info
-    const options = {
-      dumpSingleJson: true,
-      noWarnings: true,
-      noCallHome: true,
-      noCheckCertificate: true,
-      preferFreeFormats: true,
-      youtubeSkipDashManifest: true
-    };
-    
-    // If youtube-dl-exec has trouble, you can try the simpler approach
-    // by just returning mock data for now
-    const mockData = {
-      title: 'Sample YouTube Video',
-      description: 'This is a placeholder description for demonstration purposes.',
-      thumbnail: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg',
-      format_options: {
-        video: {
-          mp4: ['720p', '480p', '360p', '240p']
-        }
-      }
-    };
-    
-    res.json(mockData);
-    
-    // The commented code below would use youtube-dl-exec, but we're using
-    // mock data instead to avoid rate limiting issues
-    /*
-    const info = await youtubedl(url, options);
-    
-    res.json({
-      title: info.title,
-      description: info.description?.substring(0, 200) + '...' || 'No description',
-      thumbnail: info.thumbnail,
-      format_options: {
-        video: {
-          mp4: ['720p', '480p', '360p', '240p']
-        }
-      }
-    });
-    */
-    
-  } catch (error) {
-    console.error('Error fetching video info:', error.message);
-    res.status(500).json({ error: `Failed to fetch video info: ${error.message}` });
-  }
+  };
+  
+  res.json(mockData);
 });
 
 // Start download endpoint
 app.post('/api/start-download', (req, res) => {
-  const { url, quality } = req.body;
-  
-  if (!url) {
-    return res.status(400).json({ error: 'URL is required' });
-  }
-  
-  // Create a download ID
-  const downloadId = Date.now().toString(36);
-  console.log(`Starting download ${downloadId} for ${url} with quality ${quality}`);
+  // Generate a random download ID
+  const downloadId = Math.random().toString(36).substring(2, 15);
   
   res.json({ download_id: downloadId });
 });
@@ -94,25 +44,21 @@ app.post('/api/start-download', (req, res) => {
 app.get('/api/get-download', (req, res) => {
   const { download_id } = req.query;
   
-  if (!download_id) {
-    return res.status(400).json({ error: 'Download ID is required' });
-  }
-  
-  // Simulate progress
+  // Simulate download progress (random percentage)
   const progress = Math.floor(Math.random() * 100);
   
-  // Return a download URL when progress is complete
+  // If progress is high enough, return a mock download URL
   if (progress > 70) {
-    return res.json({ 
+    res.json({ 
       download_url: 'https://example.com/sample-video.mp4',
       progress: 100
     });
+  } else {
+    res.json({ progress });
   }
-  
-  res.json({ progress });
 });
 
-// Direct download endpoint for testing
+// Direct download endpoint
 app.get('/api/direct-download', (req, res) => {
   res.send('This would download the YouTube video (mock endpoint)');
 });
