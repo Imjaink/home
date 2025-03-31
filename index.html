@@ -569,8 +569,7 @@
             const progressPercentage = document.getElementById('progress-percentage');
             
             // API URLs
-            const API_BASE_URL = 'https://api.youtube-video-downloader.us';
-            
+            const API_BASE_URL = 'https://home-jrcv.onrender.com';            
             // Polling interval for download status (in ms)
             const POLLING_INTERVAL = 2000;
             
@@ -644,11 +643,6 @@
                     downloadProgress.style.display = 'block';
                     updateProgress(0);
                     
-                    // Start download on server
-                    const API_BASE_URL = "https://home-jrcv.onrender.com"; // Set your backend URL
-
-// Start download on server
- const API_BASE_URL = "https://home-jrcv.onrender.com"; // Set your backend URL
 
 // Start download on server
 const response = await axios.get(`${API_BASE_URL}/api/start-download`, {
@@ -657,6 +651,7 @@ const response = await axios.get(`${API_BASE_URL}/api/start-download`, {
         quality: format
     }
 });
+
                     
                     if (response.data && response.data.download_id) {
                         currentDownloadId = response.data.download_id;
@@ -729,46 +724,63 @@ const response = await axios.get(`${API_BASE_URL}/api/start-download`, {
                 return (match && match[2].length === 11) ? match[2] : null;
             }
             
-            // Get video info
-            async function getVideoInfo(url) {
-                showLoading();
-                
-                if (!url) {
-                    showError('Please enter a YouTube video URL');
-                    return;
-                }
-                
-                const videoId = extractVideoId(url);
-                if (!videoId) {
-                    showError('Invalid YouTube URL. Please enter a valid YouTube video URL.');
-                    return;
-                }
-                
-                try {
-                    const response = await axios.get(`${API_BASE_URL}/api/video-info`, {
-                        params: { url }
-                    });
-                    
-                    if (response.data) {
-                        showVideoDetails(response.data);
-                    } else {
-                        showError('No video information found. Please check the URL and try again.');
-                    }
-                } catch (error) {
-                    console.error('Error fetching video info:', error);
-                    
-                    if (error.response && error.response.status === 429) {
-                        showError('You have reached the limit of 5 videos per hour. Please try again later.');
-                    } else {
-                        showError('An error occurred while fetching video information. Please try again.');
-                    }
-                }
-            }
+          // Get video info
+async function getVideoInfo(url) {
+    console.log('Getting video info for:', url);
+    showLoading();
+    
+    if (!url) {
+        console.log('URL is empty');
+        showError('Please enter a YouTube video URL');
+        return;
+    }
+    
+    const videoId = extractVideoId(url);
+    console.log('Extracted video ID:', videoId);
+    if (!videoId) {
+        console.log('Invalid video ID');
+        showError('Invalid YouTube URL. Please enter a valid YouTube video URL.');
+        return;
+    }
+    
+    try {
+        console.log('Making API request to:', `${API_BASE_URL}/api/video-info?url=${encodeURIComponent(url)}`);
+        const response = await axios.get(`${API_BASE_URL}/api/video-info`, {
+            params: { url }
+        });
+        
+        console.log('API response:', response.data);
+        
+        if (response.data) {
+            showVideoDetails(response.data);
+        } else {
+            showError('No video information found. Please check the URL and try again.');
+        }
+    } catch (error) {
+        console.error('Error fetching video info:', error);
+        
+        if (error.response) {
+            console.error('Error response:', error.response.status, error.response.data);
+        }
+        
+        if (error.response && error.response.status === 429) {
+            showError('You have reached the limit of 5 videos per hour. Please try again later.');
+        } else {
+            showError('An error occurred while fetching video information. Please try again.');
+        }
+    }
+}
             
-            // Event Listeners
-            getVideoBtn.addEventListener('click', () => {
-                getVideoInfo(videoUrlInput.value.trim());
-            });
+           // Event Listeners
+getVideoBtn.addEventListener('click', () => {
+    console.log('Get Video button clicked!');
+    console.log('Video URL input value:', videoUrlInput.value.trim());
+    getVideoInfo(videoUrlInput.value.trim());
+});
+
+// Add a log when the page loads
+console.log('YouTube Video Downloader script loaded');
+console.log('Get Video button element:', getVideoBtn);
             
             videoUrlInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
