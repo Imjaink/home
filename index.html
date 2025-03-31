@@ -648,13 +648,15 @@
                     const API_BASE_URL = "https://home-jrcv.onrender.com"; // Set your backend URL
 
 // Start download on server
+ const API_BASE_URL = "https://home-jrcv.onrender.com"; // Set your backend URL
+
+// Start download on server
 const response = await axios.get(`${API_BASE_URL}/api/start-download`, {
     params: {
         url,
         quality: format
     }
 });
-
                     
                     if (response.data && response.data.download_id) {
                         currentDownloadId = response.data.download_id;
