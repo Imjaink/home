@@ -1,5 +1,5 @@
 {
-  "name": "https://home-jrcv.onrender.com/",
+  "name": "youtube-downloader-api",
   "version": "1.0.0",
   "description": "API for downloading YouTube videos",
   "main": "server.js",

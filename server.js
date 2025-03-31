@@ -1,10 +1,3 @@
-// Make sure this is at the top of your server.js
-const cors = require('cors');
-app.use(cors({
-  origin: '*',  // For development; in production, specify your Netlify domain
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
 const express = require('express');
 const cors = require('cors');
 const ytdl = require('ytdl-core');
@@ -12,15 +5,15 @@ const fs = require('fs');
 const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+
 // Store downloads in memory
 const downloads = {};
 
-// Enable CORS
+// Enable CORS with detailed configuration
 app.use(cors({
-  origin: '*'
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());
@@ -37,7 +30,7 @@ app.get('/', (req, res) => {
 });
 
 // Video info endpoint
-app.get('https://home-jrcv.onrender.com/video-info', async (req, res) => {
+app.get('/api/video-info', async (req, res) => {
   try {
     const { url } = req.query;
     
@@ -46,12 +39,6 @@ app.get('https://home-jrcv.onrender.com/video-info', async (req, res) => {
     }
     
     console.log(`Getting info for: ${url}`);
-    
-    // Rest of the code...
-  } catch (error) {
-    // Error handling...
-  }
-});
     
     // Validate YouTube URL
     if (!ytdl.validateURL(url)) {
@@ -93,7 +80,7 @@ app.get('https://home-jrcv.onrender.com/video-info', async (req, res) => {
 });
 
 // Start download endpoint
-app.post('https://home-jrcv.onrender.com/start-download', async (req, res) => {
+app.post('/api/start-download', async (req, res) => {
   try {
     const { url, quality } = req.body;
     
@@ -126,7 +113,7 @@ app.post('https://home-jrcv.onrender.com/start-download', async (req, res) => {
 });
 
 // Get download status
-app.get('https://home-jrcv.onrender.com/get-download', (req, res) => {
+app.get('/api/get-download', (req, res) => {
   const { download_id } = req.query;
   
   if (!download_id || !downloads[download_id]) {
@@ -141,7 +128,7 @@ app.get('https://home-jrcv.onrender.com/get-download', (req, res) => {
   
   if (download.complete) {
     // Return download URL when complete
-    const downloadUrl = `https://home-jrcv.onrender.com/download/${download_id}`;
+    const downloadUrl = `/api/download/${download_id}`;
     return res.json({ 
       download_url: downloadUrl,
       progress: 100,
@@ -154,7 +141,7 @@ app.get('https://home-jrcv.onrender.com/get-download', (req, res) => {
 });
 
 // Download file endpoint
-app.get('https://home-jrcv.onrender.com/download/:downloadId', (req, res) => {
+app.get('/api/download/:downloadId', (req, res) => {
   const downloadId = req.params.downloadId;
   
   if (!downloadId || !downloads[downloadId] || !downloads[downloadId].complete) {
