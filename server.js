@@ -28,7 +28,7 @@ app.get('/', (req, res) => {
 });
 
 // Video info endpoint
-app.get('/api/video-info', async (req, res) => {
+app.get('https://home-jrcv.onrender.com/video-info', async (req, res) => {
   try {
     const { url } = req.query;
     
@@ -78,7 +78,7 @@ app.get('/api/video-info', async (req, res) => {
 });
 
 // Start download endpoint
-app.post('/api/start-download', async (req, res) => {
+app.post('https://home-jrcv.onrender.com/start-download', async (req, res) => {
   try {
     const { url, quality } = req.body;
     
@@ -111,7 +111,7 @@ app.post('/api/start-download', async (req, res) => {
 });
 
 // Get download status
-app.get('/api/get-download', (req, res) => {
+app.get('https://home-jrcv.onrender.com/get-download', (req, res) => {
   const { download_id } = req.query;
   
   if (!download_id || !downloads[download_id]) {
@@ -126,7 +126,7 @@ app.get('/api/get-download', (req, res) => {
   
   if (download.complete) {
     // Return download URL when complete
-    const downloadUrl = `/api/download/${download_id}`;
+    const downloadUrl = `https://home-jrcv.onrender.com/download/${download_id}`;
     return res.json({ 
       download_url: downloadUrl,
       progress: 100,
@@ -139,7 +139,7 @@ app.get('/api/get-download', (req, res) => {
 });
 
 // Download file endpoint
-app.get('/api/download/:downloadId', (req, res) => {
+app.get('https://home-jrcv.onrender.com/download/:downloadId', (req, res) => {
   const downloadId = req.params.downloadId;
   
   if (!downloadId || !downloads[downloadId] || !downloads[downloadId].complete) {
