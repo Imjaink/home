@@ -4,7 +4,6 @@ const ytdl = require('@distube/ytdl-core');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Enable CORS for all routes
 app.use(cors({
   origin: '*'
 }));
