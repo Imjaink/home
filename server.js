@@ -8,10 +8,11 @@ const PORT = process.env.PORT || 3000;
 app.use(express.static("public"));
 app.use(express.json());
 app.use(cors({
-    origin: '*', // In production, replace with your actual domain
-    methods: ['GET', 'POST'],
-    allowedHeaders: ['Content-Type', 'Authorization']
-  }));
+  origin: '*',
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 // Store active downloads (in-memory for simplicity)
 const downloads = {};
 
@@ -22,15 +23,21 @@ app.get("/", (req, res) => {
 
 // Get video info
 app.get("/api/video-info", async (req, res) => {
-    console.log("Video info request received:", req.query);
-    try {
-      const url = req.query.url;
-      // rest of your code...
+  console.log("Video info request received:", req.query);
+  
+  try {
+    const url = req.query.url;
+    console.log("Processing URL:", url);
+    
     if (!ytdl.validateURL(url)) {
+      console.log("Invalid YouTube URL:", url);
       return res.status(400).json({ error: "Invalid YouTube URL" });
     }
 
+    console.log("URL is valid, fetching info...");
     const info = await ytdl.getInfo(url);
+    console.log("Video info received, title:", info.videoDetails.title);
+    
     const response = {
       title: info.videoDetails.title,
       description: info.videoDetails.shortDescription,
@@ -44,15 +51,17 @@ app.get("/api/video-info", async (req, res) => {
         }
       }
     };
+    console.log("Sending response to client");
     res.json(response);
   } catch (error) {
     console.error("Video info error:", error);
-    res.status(500).json({ error: "Failed to get video info" });
+    res.status(500).json({ error: "Failed to get video info: " + error.message });
   }
 });
 
 // Start download
 app.get("/api/start-download", async (req, res) => {
+  console.log("Download request received:", req.query);
   try {
     const url = req.query.url;
     const quality = req.query.quality;
@@ -87,7 +96,7 @@ app.get("/api/start-download", async (req, res) => {
     res.json({ download_id: downloadId });
   } catch (error) {
     console.error("Start download error:", error);
-    res.status(500).json({ error: "Failed to start download" });
+    res.status(500).json({ error: "Failed to start download: " + error.message });
   }
 });
 
@@ -110,6 +119,16 @@ app.get("/api/get-download", (req, res) => {
   }
 });
 
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.json({
+    status: "ok",
+    ytdlVersion: ytdl.version,
+    timestamp: new Date().toISOString()
+  });
+});
+
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`ytdl-core version: ${ytdl.version}`);
 });
