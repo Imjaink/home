@@ -682,8 +682,8 @@
                 downloadOptionsDiv.classList.remove('hidden');
             }
             
-            // Function to simulate a download
-            function startDownload(url, quality) {
+            // Function to actually download a video
+            async function startDownload(url, quality) {
                 // Show downloading progress UI
                 downloadingProgressWrapper.classList.add('active');
                 updateDownloadProgress(0);
@@ -702,31 +702,109 @@
                     clickedOption.classList.add('loading');
                 }
                 
-                // Simulate download progress
-                let progress = 0;
-                const progressInterval = setInterval(() => {
-                    progress += Math.floor(Math.random() * 10) + 1;
-                    if (progress >= 100) {
-                        progress = 100;
-                        clearInterval(progressInterval);
+                try {
+                    console.log('Starting download with params:', { url, quality });
+                    
+                    // Start the download on your server
+                    const response = await fetch(`${API_BASE_URL}/api/start-download`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify({ url, quality })
+                    });
+                    
+                    console.log('Start download response status:', response.status);
+                    
+                    if (!response.ok) {
+                        throw new Error('Failed to start download');
+                    }
+                    
+                    const data = await response.json();
+                    const downloadId = data.download_id;
+                    
+                    console.log('Download started with ID:', downloadId);
+                    
+                    // Poll for download progress
+                    let downloadComplete = false;
+                    const progressInterval = setInterval(async () => {
+                        if (downloadComplete) {
+                            clearInterval(progressInterval);
+                            return;
+                        }
                         
-                        // Show completion message
-                        updateDownloadProgress(100);
-                        showError('Download complete! (This is a simulation - no actual file is downloaded)');
-                        
-                        // Clean up UI
-                        setTimeout(() => {
+                        try {
+                            console.log('Checking download progress for ID:', downloadId);
+                            const progressResponse = await fetch(`${API_BASE_URL}/api/get-download?download_id=${downloadId}`);
+                            
+                            console.log('Progress response status:', progressResponse.status);
+                            
+                            if (!progressResponse.ok) {
+                                console.error('Progress response not OK:', progressResponse.statusText);
+                                throw new Error('Failed to get download progress');
+                            }
+                            
+                            const progressData = await progressResponse.json();
+                            console.log('Progress data:', progressData);
+                            
+                            if (progressData.download_url) {
+                                // Download is complete, provide download link
+                                downloadComplete = true;
+                                updateDownloadProgress(100);
+                                
+                                // Start the download by redirecting to the download URL
+                                const fullDownloadUrl = `${API_BASE_URL}${progressData.download_url}`;
+                                console.log('Download URL:', fullDownloadUrl);
+                                
+                                // Create a download link and click it
+                                const downloadLink = document.createElement('a');
+                                downloadLink.href = fullDownloadUrl;
+                                downloadLink.download = progressData.filename || 'youtube-video.mp4';
+                                document.body.appendChild(downloadLink);
+                                downloadLink.click();
+                                document.body.removeChild(downloadLink);
+                                
+                                // Show success message
+                                showError('Download complete! Your file should begin downloading automatically.');
+                                
+                                // Clean up UI after a short delay
+                                setTimeout(() => {
+                                    downloadingProgressWrapper.classList.remove('active');
+                                    qualityOptions.forEach(option => {
+                                        option.classList.remove('disabled');
+                                        option.classList.remove('loading');
+                                    });
+                                }, 1000);
+                            } else {
+                                // Update progress
+                                const progress = progressData.progress || 0;
+                                console.log('Download progress:', progress);
+                                updateDownloadProgress(progress);
+                            }
+                        } catch (err) {
+                            console.error('Error checking download progress:', err);
+                            showError(`Error checking download progress: ${err.message}`);
+                            clearInterval(progressInterval);
+                            
+                            // Clean up UI
                             downloadingProgressWrapper.classList.remove('active');
                             qualityOptions.forEach(option => {
                                 option.classList.remove('disabled');
                                 option.classList.remove('loading');
                             });
-                        }, 1000);
-                    }
+                        }
+                    }, 2000);
                     
-                    console.log('Simulated download progress:', progress);
-                    updateDownloadProgress(progress);
-                }, 500);
+                } catch (err) {
+                    console.error('Download error:', err);
+                    showError(`Download failed: ${err.message}`);
+                    downloadingProgressWrapper.classList.remove('active');
+                    qualityOptions.forEach(option => {
+                        option.classList.remove('disabled');
+                        option.classList.remove('loading');
+                    });
+                }
             }
             
             // Event listener for Get Video button
