@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const ytdl = require('ytdl-core');
+const youtubedl = require('youtube-dl-exec');
 const fs = require('fs');
 const path = require('path');
 const app = express();
@@ -40,37 +41,63 @@ app.get('/api/video-info', async (req, res) => {
     
     console.log(`Getting info for: ${url}`);
     
-    // Validate YouTube URL
-    if (!ytdl.validateURL(url)) {
-      return res.status(400).json({ error: 'Invalid YouTube URL' });
+    // Try first with ytdl-core (faster)
+    try {
+      if (ytdl.validateURL(url)) {
+        const info = await ytdl.getInfo(url);
+        
+        // Format the response
+        const formats = ytdl.filterFormats(info.formats, 'videoandaudio');
+        
+        // Get unique quality labels
+        const qualities = [...new Set(formats.map(f => f.qualityLabel))]
+          .filter(Boolean)
+          .sort((a, b) => {
+            // Sort by resolution (highest first)
+            const aRes = parseInt(a.match(/\d+/)[0]);
+            const bRes = parseInt(b.match(/\d+/)[0]);
+            return bRes - aRes;
+          });
+        
+        return res.json({
+          title: info.videoDetails.title,
+          description: info.videoDetails.description?.substring(0, 200) + '...' || 'No description',
+          thumbnail: info.videoDetails.thumbnails[info.videoDetails.thumbnails.length - 1].url,
+          format_options: {
+            video: {
+              mp4: qualities.length > 0 ? qualities : ['720p', '480p', '360p']
+            }
+          },
+          videoId: info.videoDetails.videoId
+        });
+      }
+    } catch (ytdlError) {
+      console.log('ytdl-core failed, trying youtube-dl-exec:', ytdlError.message);
     }
     
-    // Get video info
-    const info = await ytdl.getInfo(url);
+    // If ytdl-core fails, try youtube-dl-exec (more robust but slower)
+    const info = await youtubedl(url, {
+      dumpSingleJson: true,
+      noWarnings: true,
+      noCallHome: true,
+      noCheckCertificate: true,
+      preferFreeFormats: true,
+      youtubeSkipDashManifest: true
+    });
     
-    // Format the response
-    const formats = ytdl.filterFormats(info.formats, 'videoandaudio');
-    
-    // Get unique quality labels
-    const qualities = [...new Set(formats.map(f => f.qualityLabel))]
-      .filter(Boolean)
-      .sort((a, b) => {
-        // Sort by resolution (highest first)
-        const aRes = parseInt(a.match(/\d+/)[0]);
-        const bRes = parseInt(b.match(/\d+/)[0]);
-        return bRes - aRes;
-      });
+    // Format the quality options
+    const formats = info.formats.filter(f => f.ext === 'mp4' && f.resolution !== null);
+    const qualities = [...new Set(formats.map(f => f.resolution))].filter(Boolean);
     
     res.json({
-      title: info.videoDetails.title,
-      description: info.videoDetails.description?.substring(0, 200) + '...' || 'No description',
-      thumbnail: info.videoDetails.thumbnails[info.videoDetails.thumbnails.length - 1].url,
+      title: info.title,
+      description: info.description?.substring(0, 200) + '...' || 'No description',
+      thumbnail: info.thumbnail,
       format_options: {
         video: {
           mp4: qualities.length > 0 ? qualities : ['720p', '480p', '360p']
         }
-      },
-      videoId: info.videoDetails.videoId
+      }
     });
     
   } catch (error) {
@@ -79,6 +106,7 @@ app.get('/api/video-info', async (req, res) => {
   }
 });
 
+// The rest of your code remains the same...
 // Start download endpoint
 app.post('/api/start-download', async (req, res) => {
   try {
@@ -173,62 +201,93 @@ app.get('/api/download/:downloadId', (req, res) => {
 // Helper function to download video
 async function downloadVideo(url, requestedQuality, downloadId) {
   try {
-    // Get video info
-    const info = await ytdl.getInfo(url);
-    const videoTitle = info.videoDetails.title.replace(/[^\w\s]/gi, '_');
-    const outputPath = path.join(downloadDir, `${videoTitle}-${downloadId}.mp4`);
+    let outputPath, videoTitle;
     
-    // Find the format that matches the requested quality
-    const formats = ytdl.filterFormats(info.formats, 'videoandaudio');
-    const format = formats.find(f => f.qualityLabel === requestedQuality) || 
-                   formats.sort((a, b) => Number(b.height) - Number(a.height))[0];
-    
-    if (!format) {
-      downloads[downloadId].error = 'No suitable format found';
-      return;
+    // First try ytdl-core
+    try {
+      // Get video info
+      const info = await ytdl.getInfo(url);
+      videoTitle = info.videoDetails.title.replace(/[^\w\s]/gi, '_');
+      outputPath = path.join(downloadDir, `${videoTitle}-${downloadId}.mp4`);
+      
+      // Find the format that matches the requested quality
+      const formats = ytdl.filterFormats(info.formats, 'videoandaudio');
+      const format = formats.find(f => f.qualityLabel === requestedQuality) || 
+                     formats.sort((a, b) => Number(b.height) - Number(a.height))[0];
+      
+      if (!format) {
+        throw new Error('No suitable format found');
+      }
+      
+      // Start download
+      const video = ytdl(url, { quality: format.itag });
+      const fileStream = fs.createWriteStream(outputPath);
+      
+      let totalBytes = 0;
+      let downloadedBytes = 0;
+      
+      video.on('info', (info, format) => {
+        totalBytes = format.contentLength;
+      });
+      
+      video.on('data', (chunk) => {
+        downloadedBytes += chunk.length;
+        
+        if (totalBytes > 0) {
+          const progress = Math.floor((downloadedBytes / totalBytes) * 100);
+          downloads[downloadId].progress = progress;
+        } else {
+          // If we don't have total size, estimate progress
+          downloads[downloadId].progress = Math.min(
+            Math.floor((downloadedBytes / (10 * 1024 * 1024)) * 100), 
+            99
+          );
+        }
+      });
+      
+      video.on('end', () => {
+        downloads[downloadId].complete = true;
+        downloads[downloadId].progress = 100;
+        downloads[downloadId].filePath = outputPath;
+        downloads[downloadId].fileName = `${videoTitle}.mp4`;
+        console.log(`Download complete: ${outputPath}`);
+      });
+      
+      video.on('error', (error) => {
+        throw error;
+      });
+      
+      // Pipe download stream to file
+      video.pipe(fileStream);
+      return; // Exit function if ytdl-core succeeds
+      
+    } catch (ytdlError) {
+      console.log('ytdl-core download failed, trying youtube-dl-exec:', ytdlError.message);
     }
     
-    // Start download
-    const video = ytdl(url, { quality: format.itag });
-    const fileStream = fs.createWriteStream(outputPath);
-    
-    let totalBytes = 0;
-    let downloadedBytes = 0;
-    
-    video.on('info', (info, format) => {
-      totalBytes = format.contentLength;
+    // Fallback to youtube-dl-exec if ytdl-core fails
+    const info = await youtubedl.exec(url, {
+      output: path.join(downloadDir, `%(title)s-${downloadId}.%(ext)s`),
+      format: requestedQuality.includes('p') ? `bestvideo[height<=${requestedQuality.replace('p', '')}]+bestaudio/best[height<=${requestedQuality.replace('p', '')}]` : 'best',
+      mergeOutputFormat: 'mp4'
     });
     
-    video.on('data', (chunk) => {
-      downloadedBytes += chunk.length;
-      
-      if (totalBytes > 0) {
-        const progress = Math.floor((downloadedBytes / totalBytes) * 100);
-        downloads[downloadId].progress = progress;
-      } else {
-        // If we don't have total size, estimate progress
-        downloads[downloadId].progress = Math.min(
-          Math.floor((downloadedBytes / (10 * 1024 * 1024)) * 100), 
-          99
-        );
-      }
-    });
+    // Find the created file
+    const files = fs.readdirSync(downloadDir);
+    const downloadedFile = files.find(file => file.includes(downloadId));
     
-    video.on('end', () => {
-      downloads[downloadId].complete = true;
-      downloads[downloadId].progress = 100;
-      downloads[downloadId].filePath = outputPath;
-      downloads[downloadId].fileName = `${videoTitle}.mp4`;
-      console.log(`Download complete: ${outputPath}`);
-    });
+    if (!downloadedFile) {
+      throw new Error('Download failed: File not found');
+    }
     
-    video.on('error', (error) => {
-      console.error(`Download error for ${downloadId}:`, error);
-      downloads[downloadId].error = error.message;
-    });
+    outputPath = path.join(downloadDir, downloadedFile);
+    videoTitle = downloadedFile.replace(`-${downloadId}.mp4`, '');
     
-    // Pipe download stream to file
-    video.pipe(fileStream);
+    downloads[downloadId].complete = true;
+    downloads[downloadId].progress = 100;
+    downloads[downloadId].filePath = outputPath;
+    downloads[downloadId].fileName = `${videoTitle}.mp4`;
+    console.log(`Download complete: ${outputPath}`);
     
   } catch (error) {
     console.error(`Error in download process: ${error.message}`);
