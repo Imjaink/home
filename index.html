@@ -665,9 +665,7 @@
             }
             
             function showError(message) {
-                result.classList.add('hidden');
                 loading.classList.add('hidden');
-                downloadOptionsDiv.classList.add('hidden');
                 error.textContent = message;
                 error.classList.remove('hidden');
             }
@@ -677,6 +675,60 @@
                 if (isNaN(progress)) return;
                 loadingIndicator.style.width = `${progress}%`;
                 downloadProgressPercentage.textContent = `(${progress}%)`;
+            }
+            
+            function displayVideoInfo(data) {
+                console.log('Displaying video info:', data);
+                loading.classList.add('hidden');
+                error.classList.add('hidden');
+                
+                // Set video thumbnail, title and description
+                thumbnail.src = data.thumbnail || data.image || '';
+                videoTitle.textContent = data.title || 'Video Title Not Available';
+                videoDescription.textContent = data.description || 'No description available';
+                
+                // Display available formats - handle different API response structures
+                qualityOptionsDiv.innerHTML = '';
+                let formats = [];
+                
+                // Try different property paths that might contain formats
+                if (data.format_options?.video?.mp4) {
+                    formats = data.format_options.video.mp4;
+                } else if (data.formats) {
+                    formats = data.formats.map(f => f.qualityLabel || `${f.height}p`);
+                } else if (data.videos) {
+                    formats = Object.keys(data.videos);
+                } else if (data.qualityOptions) {
+                    formats = data.qualityOptions;
+                }
+                
+                console.log('Available formats:', formats);
+                
+                if (formats.length === 0) {
+                    // If no formats are found, create some demo quality options
+                    console.log('No formats found in response, using demo qualities');
+                    formats = ['720p', '480p', '360p', '240p', '144p'];
+                }
+                
+                // Create quality option buttons
+                formats.forEach(format => {
+                    const qualityOption = document.createElement('div');
+                    qualityOption.className = 'quality-option';
+                    qualityOption.innerHTML = `
+                        <span>${format}</span>
+                        <div class="loader"></div>
+                    `;
+                    
+                    qualityOption.addEventListener('click', () => {
+                        startDownload(videoUrlInput.value, format);
+                    });
+                    
+                    qualityOptionsDiv.appendChild(qualityOption);
+                });
+                
+                // Show video info and download options
+                result.classList.remove('hidden');
+                downloadOptionsDiv.classList.remove('hidden');
             }
             
             // Base URL for your server API
