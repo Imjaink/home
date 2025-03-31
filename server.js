@@ -7,8 +7,11 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(express.static("public"));
 app.use(express.json());
-app.use(cors({ origin: "*" })); // Allow all origins for testing; restrict in production
-
+app.use(cors({
+    origin: '*', // In production, replace with your actual domain
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+  }));
 // Store active downloads (in-memory for simplicity)
 const downloads = {};
 
@@ -19,8 +22,10 @@ app.get("/", (req, res) => {
 
 // Get video info
 app.get("/api/video-info", async (req, res) => {
-  try {
-    const url = req.query.url;
+    console.log("Video info request received:", req.query);
+    try {
+      const url = req.query.url;
+      // rest of your code...
     if (!ytdl.validateURL(url)) {
       return res.status(400).json({ error: "Invalid YouTube URL" });
     }
