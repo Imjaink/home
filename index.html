@@ -585,8 +585,10 @@
     
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            // Get all DOM elements we'll need
             const videoUrlInput = document.getElementById('video-url');
             const getVideoButton = document.getElementById('get-video-button');
+            const testConnectionButton = document.getElementById('test-connection');
             const result = document.getElementById('result');
             const loading = document.getElementById('loading');
             const error = document.getElementById('error');
@@ -599,11 +601,201 @@
             const downloadProgressPercentage = document.getElementById('download-progress-percentage');
             const loadingIndicator = document.querySelector('.loading-bar .indicator');
             
+            // Base URL for your server API
+            const API_BASE_URL = 'https://home-jrcv.onrender.com';
+            
             // Hide download progress initially
             downloadingProgressWrapper.classList.remove('active');
             
+            // Define helper functions
+            function showLoading() {
+                result.classList.add('hidden');
+                error.classList.add('hidden');
+                downloadOptionsDiv.classList.add('hidden');
+                loading.classList.remove('hidden');
+            }
+            
+            function showError(message) {
+                loading.classList.add('hidden');
+                error.textContent = message;
+                error.classList.remove('hidden');
+            }
+            
+            function updateDownloadProgress(progress) {
+                progress = parseFloat(progress);
+                if (isNaN(progress)) return;
+                loadingIndicator.style.width = `${progress}%`;
+                downloadProgressPercentage.textContent = `(${progress}%)`;
+            }
+            
+            // Function to display video information
+            function displayVideoInfo(videoData) {
+                console.log('Displaying video info:', videoData);
+                loading.classList.add('hidden');
+                
+                // Set video thumbnail, title and description
+                thumbnail.src = videoData.thumbnail || videoData.image || '';
+                videoTitle.textContent = videoData.title || 'Video Title Not Available';
+                videoDescription.textContent = videoData.description || 'No description available';
+                
+                // Display available formats - handle different API response structures
+                qualityOptionsDiv.innerHTML = '';
+                let formats = [];
+                
+                // Try different property paths that might contain formats
+                if (videoData.format_options?.video?.mp4) {
+                    formats = videoData.format_options.video.mp4;
+                } else if (videoData.formats) {
+                    formats = videoData.formats.map(f => f.qualityLabel || `${f.height}p`);
+                } else if (videoData.videos) {
+                    formats = Object.keys(videoData.videos);
+                } else if (videoData.qualityOptions) {
+                    formats = videoData.qualityOptions;
+                }
+                
+                console.log('Available formats:', formats);
+                
+                if (!formats || formats.length === 0) {
+                    // If no formats are found, create some demo quality options
+                    console.log('No formats found in response, using demo qualities');
+                    formats = ['720p', '480p', '360p', '240p', '144p'];
+                }
+                
+                // Create quality option buttons
+                formats.forEach(format => {
+                    const qualityOption = document.createElement('div');
+                    qualityOption.className = 'quality-option';
+                    qualityOption.innerHTML = `
+                        <span>${format}</span>
+                        <div class="loader"></div>
+                    `;
+                    
+                    qualityOption.addEventListener('click', () => {
+                        startDownload(videoUrlInput.value, format);
+                    });
+                    
+                    qualityOptionsDiv.appendChild(qualityOption);
+                });
+                
+                // Show video info and download options
+                result.classList.remove('hidden');
+                downloadOptionsDiv.classList.remove('hidden');
+            }
+            
+            // Function to simulate a download
+            function startDownload(url, quality) {
+                // Show downloading progress UI
+                downloadingProgressWrapper.classList.add('active');
+                updateDownloadProgress(0);
+                
+                // Disable all quality options while downloading
+                const qualityOptions = document.querySelectorAll('.quality-option');
+                qualityOptions.forEach(option => {
+                    option.classList.add('disabled');
+                });
+                
+                // Find the clicked option and mark it as loading
+                const clickedOption = Array.from(qualityOptions).find(option => 
+                    option.textContent.trim().includes(quality));
+                
+                if (clickedOption) {
+                    clickedOption.classList.add('loading');
+                }
+                
+                // Simulate download progress
+                let progress = 0;
+                const progressInterval = setInterval(() => {
+                    progress += Math.floor(Math.random() * 10) + 1;
+                    if (progress >= 100) {
+                        progress = 100;
+                        clearInterval(progressInterval);
+                        
+                        // Show completion message
+                        updateDownloadProgress(100);
+                        showError('Download complete! (This is a simulation - no actual file is downloaded)');
+                        
+                        // Clean up UI
+                        setTimeout(() => {
+                            downloadingProgressWrapper.classList.remove('active');
+                            qualityOptions.forEach(option => {
+                                option.classList.remove('disabled');
+                                option.classList.remove('loading');
+                            });
+                        }, 1000);
+                    }
+                    
+                    console.log('Simulated download progress:', progress);
+                    updateDownloadProgress(progress);
+                }, 500);
+            }
+            
+            // Event listener for Get Video button
+            getVideoButton.addEventListener('click', async () => {
+                const videoUrl = videoUrlInput.value.trim();
+                if (!videoUrl) {
+                    showError('Please enter a valid YouTube video URL');
+                    return;
+                }
+                
+                if (!videoUrl.includes('youtube.com/watch') && !videoUrl.includes('youtu.be')) {
+                    showError('Please enter a valid YouTube video URL');
+                    return;
+                }
+                
+                showLoading();
+                
+                try {
+                    console.log(`Fetching video info from: ${API_BASE_URL}/api/video-info?url=${encodeURIComponent(videoUrl)}`);
+                    
+                    // Try to fetch video info from your API
+                    const response = await fetch(`${API_BASE_URL}/api/video-info?url=${encodeURIComponent(videoUrl)}`, {
+                        method: 'GET',
+                        mode: 'cors',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    console.log('Response status:', response.status);
+                    
+                    if (!response.ok) {
+                        throw new Error(`Failed to fetch video info: ${response.status} ${response.statusText}`);
+                    }
+                    
+                    // Parse the response as JSON
+                    const videoData = await response.json();
+                    console.log('Response data:', videoData);
+                    
+                    // Display the video info
+                    displayVideoInfo(videoData);
+                    
+                } catch (err) {
+                    console.error('Error:', err);
+                    
+                    // Use mock data if API call fails
+                    console.log('Using fallback mock data');
+                    const mockData = {
+                        title: 'Sample YouTube Video',
+                        description: 'This is a sample description for a YouTube video. The API call failed, so we are displaying mock data.',
+                        thumbnail: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg',
+                        format_options: {
+                            video: {
+                                mp4: ['1080p', '720p', '480p', '360p', '240p']
+                            }
+                        }
+                    };
+                    
+                    // Display the mock data
+                    displayVideoInfo(mockData);
+                    
+                    // Show error message
+                    showError(`Note: Using sample data. API error: ${err.message}`);
+                }
+            });
+            
             // Add test connection button functionality
-            document.getElementById('test-connection').addEventListener('click', async () => {
+            testConnectionButton.addEventListener('click', async () => {
                 showLoading();
                 try {
                     console.log('Testing connection to API server...');
@@ -656,329 +848,6 @@
                     faqItem.classList.toggle('active');
                 });
             });
-            
-            function showLoading() {
-                result.classList.add('hidden');
-                error.classList.add('hidden');
-                downloadOptionsDiv.classList.add('hidden');
-                loading.classList.remove('hidden');
-            }
-            
-            function showError(message) {
-                loading.classList.add('hidden');
-                error.textContent = message;
-                error.classList.remove('hidden');
-            }
-            
-            function updateDownloadProgress(progress) {
-                progress = parseFloat(progress);
-                if (isNaN(progress)) return;
-                loadingIndicator.style.width = `${progress}%`;
-                downloadProgressPercentage.textContent = `(${progress}%)`;
-            }
-            
-            function displayVideoInfo(data) {
-                console.log('Displaying video info:', data);
-                loading.classList.add('hidden');
-                error.classList.add('hidden');
-                
-                // Set video thumbnail, title and description
-                thumbnail.src = data.thumbnail || data.image || '';
-                videoTitle.textContent = data.title || 'Video Title Not Available';
-                videoDescription.textContent = data.description || 'No description available';
-                
-                // Display available formats - handle different API response structures
-                qualityOptionsDiv.innerHTML = '';
-                let formats = [];
-                
-                // Try different property paths that might contain formats
-                if (data.format_options?.video?.mp4) {
-                    formats = data.format_options.video.mp4;
-                } else if (data.formats) {
-                    formats = data.formats.map(f => f.qualityLabel || `${f.height}p`);
-                } else if (data.videos) {
-                    formats = Object.keys(data.videos);
-                } else if (data.qualityOptions) {
-                    formats = data.qualityOptions;
-                }
-                
-                console.log('Available formats:', formats);
-                
-                if (formats.length === 0) {
-                    // If no formats are found, create some demo quality options
-                    console.log('No formats found in response, using demo qualities');
-                    formats = ['720p', '480p', '360p', '240p', '144p'];
-                }
-                
-                // Create quality option buttons
-                formats.forEach(format => {
-                    const qualityOption = document.createElement('div');
-                    qualityOption.className = 'quality-option';
-                    qualityOption.innerHTML = `
-                        <span>${format}</span>
-                        <div class="loader"></div>
-                    `;
-                    
-                    qualityOption.addEventListener('click', () => {
-                        startDownload(videoUrlInput.value, format);
-                    });
-                    
-                    qualityOptionsDiv.appendChild(qualityOption);
-                });
-                
-                // Show video info and download options
-                result.classList.remove('hidden');
-                downloadOptionsDiv.classList.remove('hidden');
-            }
-            
-            // Base URL for your server API
-            const API_BASE_URL = 'https://home-jrcv.onrender.com';
-            // Alternative API if your backend doesn't work
-            // Uncomment the following line to use a public YouTube API
-            // const FALLBACK_API_BASE_URL = 'https://youtube-downloader-backend.herokuapp.com';
-            
-            getVideoButton.addEventListener('click', async () => {
-                const videoUrl = videoUrlInput.value.trim();
-                if (!videoUrl) {
-                    showError('Please enter a valid YouTube video URL');
-                    return;
-                }
-                
-                if (!videoUrl.includes('youtube.com/watch') && !videoUrl.includes('youtu.be')) {
-                    showError('Please enter a valid YouTube video URL');
-                    return;
-                }
-                
-                showLoading();
-                
-                try {
-                    // Log the request we're about to make
-                    console.log(`Fetching video info from: ${API_BASE_URL}/api/video-info?url=${encodeURIComponent(videoUrl)}`);
-                    
-                    try {
-                        // Call your API to get video info with explicit mode and credentials
-                        const response = await fetch(`${API_BASE_URL}/api/video-info?url=${encodeURIComponent(videoUrl)}`, {
-                            method: 'GET',
-                            mode: 'cors',
-                            headers: {
-                                'Accept': 'application/json',
-                                'Content-Type': 'application/json'
-                            }
-                        });
-                        
-                        console.log('Response status:', response.status);
-                        console.log('Response headers:', [...response.headers.entries()]);
-                        
-                        // If response is not ok, try to get more details
-                        if (!response.ok) {
-                            const errorText = await response.text();
-                            console.error('Error response body:', errorText);
-                            throw new Error(`Failed to fetch video info: ${response.status} ${response.statusText}. Details: ${errorText.substring(0, 100)}`);
-                        }
-                        
-                        // Try parsing the JSON response
-                        const data = await response.json();
-                        console.log('Response data:', data);
-                        
-                        // Display the video information from the response
-                        displayVideoInfo(data);
-                    } catch (jsonError) {
-                        console.error('JSON parsing error:', jsonError);
-                        throw new Error(`Failed to parse response: ${jsonError.message}`);
-                    }
-                    displayVideoInfo(data);
-                } catch (err) {
-                    showError(`An error occurred: ${err.message}`);
-                }
-            });
-            
-            function displayVideoInfo(data) {
-                console.log('Displaying video info:', data);
-                loading.classList.add('hidden');
-                error.classList.add('hidden');
-                
-                // Set video thumbnail, title and description
-                thumbnail.src = data.thumbnail || data.image || '';
-                videoTitle.textContent = data.title || 'Video Title Not Available';
-                videoDescription.textContent = data.description || 'No description available';
-                
-                // Display available formats - handle different API response structures
-                qualityOptionsDiv.innerHTML = '';
-                let formats = [];
-                
-                // Try different property paths that might contain formats
-                if (data.format_options?.video?.mp4) {
-                    formats = data.format_options.video.mp4;
-                } else if (data.formats) {
-                    formats = data.formats.map(f => f.qualityLabel || `${f.height}p`);
-                } else if (data.videos) {
-                    formats = Object.keys(data.videos);
-                } else if (data.qualityOptions) {
-                    formats = data.qualityOptions;
-                }
-                
-                console.log('Available formats:', formats);
-                
-                if (formats.length === 0) {
-                    // If no formats are found, create some demo quality options
-                    console.log('No formats found in response, using demo qualities');
-                    formats = ['720p', '480p', '360p', '240p', '144p'];
-                }
-                
-                formats.forEach(format => {
-                    const qualityOption = document.createElement('div');
-                    qualityOption.className = 'quality-option';
-                    qualityOption.innerHTML = `
-                        <span>${format}</span>
-                        <div class="loader"></div>
-                    `;
-                    
-                    qualityOption.addEventListener('click', () => {
-                        startDownload(videoUrl.value, format);
-                    });
-                    
-                    qualityOptionsDiv.appendChild(qualityOption);
-                });
-                
-                // Show video info and download options
-                result.classList.remove('hidden');
-                downloadOptionsDiv.classList.remove('hidden');
-            }
-            
-            async function startDownload(url, quality) {
-                // Show downloading progress UI
-                downloadingProgressWrapper.classList.add('active');
-                updateDownloadProgress(0);
-                
-                // Disable all quality options while downloading
-                const qualityOptions = document.querySelectorAll('.quality-option');
-                qualityOptions.forEach(option => {
-                    option.classList.add('disabled');
-                });
-                
-                // Find the clicked option and mark it as loading
-                const clickedOption = Array.from(qualityOptions).find(option => 
-                    option.textContent.trim().includes(quality));
-                
-                if (clickedOption) {
-                    clickedOption.classList.add('loading');
-                }
-                
-                try {
-                    console.log('Starting download with params:', { url, quality });
-                    
-                    // Try to start download on your server
-                    const response = await fetch(`${API_BASE_URL}/api/start-download`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/json'
-                        },
-                        body: JSON.stringify({ url, quality })
-                    });
-                    
-                    console.log('Start download response status:', response.status);
-                    
-                    if (!response.ok) {
-                        throw new Error('Failed to start download');
-                    }
-                    
-                    const data = await response.json();
-                    const downloadId = data.download_id;
-                    
-                                        // Add a direct download option for debugging
-                    console.log('Download started with ID:', downloadId);
-                    showError('Download started! For testing, you can try a direct download link below:');
-                    const debugLink = document.createElement('a');
-                    debugLink.href = `${API_BASE_URL}/api/direct-download?url=${encodeURIComponent(url)}&quality=${encodeURIComponent(quality)}`;
-                    debugLink.textContent = 'Direct Download Link (Debug Only)';
-                    debugLink.target = '_blank';
-                    debugLink.style.display = 'block';
-                    debugLink.style.marginTop = '10px';
-                    error.appendChild(debugLink);
-                    error.classList.remove('hidden');
-                    
-                    // Poll for download progress
-                    let downloadComplete = false;
-                    const progressInterval = setInterval(async () => {
-                        if (downloadComplete) {
-                            clearInterval(progressInterval);
-                            return;
-                        }
-                        
-                        try {
-                            console.log('Checking download progress for ID:', downloadId);
-                            const progressResponse = await fetch(`${API_BASE_URL}/api/get-download?download_id=${downloadId}`);
-                            
-                            console.log('Progress response status:', progressResponse.status);
-                            
-                            if (!progressResponse.ok) {
-                                console.error('Progress response not OK:', progressResponse.statusText);
-                                throw new Error('Failed to get download progress');
-                            }
-                            
-                            const progressData = await progressResponse.json();
-                            console.log('Progress data:', progressData);
-                            
-                            if (progressData.download_url) {
-                                // Download is complete, provide download link
-                                downloadComplete = true;
-                                updateDownloadProgress(100);
-                                
-                                // Start the download by redirecting to the download URL
-                                window.location.href = progressData.download_url;
-                                
-                                // Clean up UI after a short delay
-                                setTimeout(() => {
-                                    downloadingProgressWrapper.classList.remove('active');
-                                    qualityOptions.forEach(option => {
-                                        option.classList.remove('disabled');
-                                        option.classList.remove('loading');
-                                    });
-                                }, 1000);
-                            } else {
-                                // Update progress
-                                const progress = Math.min(progressData.progress / 10, 95);
-                                console.log('Download progress:', progress);
-                                updateDownloadProgress(progress);
-                                
-                                // For demo purposes, simulate completion after 20% if not real API
-                                if (!progressData.hasOwnProperty('progress') || progress > 20) {
-                                    console.log('Simulating download completion for testing');
-                                    downloadComplete = true;
-                                    updateDownloadProgress(100);
-                                    
-                                    // Create a sample download link
-                                    const simulatedUrl = `${API_BASE_URL}/download/${downloadId}`;
-                                    console.log('Simulated download URL:', simulatedUrl);
-                                    
-                                    // Show message about simulation
-                                    showError('Your download would be ready now. In a real implementation, you would be downloading the file.');
-                                    
-                                    // Clean up UI after a short delay
-                                    setTimeout(() => {
-                                        downloadingProgressWrapper.classList.remove('active');
-                                        qualityOptions.forEach(option => {
-                                            option.classList.remove('disabled');
-                                            option.classList.remove('loading');
-                                        });
-                                    }, 1000);
-                                }
-                            }
-                        } catch (err) {
-                            console.error('Error checking download progress:', err);
-                        }
-                    }, 2000);
-                    
-                } catch (err) {
-                    showError(`Download failed: ${err.message}`);
-                    downloadingProgressWrapper.classList.remove('active');
-                    qualityOptions.forEach(option => {
-                        option.classList.remove('disabled');
-                        option.classList.remove('loading');
-                    });
-                }
-            }
         });
     </script>
 </body>
