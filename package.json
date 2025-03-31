@@ -1,5 +1,17 @@
-"dependencies": {
-  "cors": "^2.8.5",
-  "express": "^4.18.2",
-  "ytdl-core": "^4.11.5"
+{
+  "name": "https://home-jrcv.onrender.com/",
+  "version": "1.0.0",
+  "description": "API for downloading YouTube videos",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "ytdl-core": "^4.11.5"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
 }
