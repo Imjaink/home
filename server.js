@@ -1,134 +1,74 @@
-const express = require("express");
-const ytdl = require("ytdl-core");
-const cors = require("cors");
+const express = require('express');
+const cors = require('cors');
+const ytdl = require('ytdl-core');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(express.static("public"));
+// Enable CORS
+app.use(cors());
 app.use(express.json());
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
 
-// Store active downloads (in-memory for simplicity)
-const downloads = {};
-
-// Root route
-app.get("/", (req, res) => {
-  res.send("Server is running!");
+// Root endpoint for testing
+app.get('/', (req, res) => {
+  res.json({ message: 'YouTube Downloader API is running!' });
 });
 
-// Get video info
-app.get("/api/video-info", async (req, res) => {
-  console.log("Video info request received:", req.query);
-  
+// Video info endpoint
+app.get('/api/video-info', async (req, res) => {
   try {
-    const url = req.query.url;
-    console.log("Processing URL:", url);
+    const { url } = req.query;
     
-    if (!ytdl.validateURL(url)) {
-      console.log("Invalid YouTube URL:", url);
-      return res.status(400).json({ error: "Invalid YouTube URL" });
+    if (!url) {
+      return res.status(400).json({ error: 'URL is required' });
     }
-
-    console.log("URL is valid, fetching info...");
-    const info = await ytdl.getInfo(url);
-    console.log("Video info received, title:", info.videoDetails.title);
     
-    const response = {
+    const info = await ytdl.getInfo(url);
+    const formats = ytdl.filterFormats(info.formats, 'videoandaudio');
+    const qualities = [...new Set(formats.map(f => f.qualityLabel))].filter(Boolean);
+    
+    res.json({
       title: info.videoDetails.title,
-      description: info.videoDetails.shortDescription,
-      image: info.videoDetails.thumbnails[0].url,
+      description: info.videoDetails.description?.substring(0, 200) + '...' || 'No description',
+      thumbnail: info.videoDetails.thumbnails[info.videoDetails.thumbnails.length - 1].url,
       format_options: {
         video: {
-          mp4: ["360p", "720p", "1080p"] // Simplified; you can get real formats from info.formats
-        },
-        audio: {
-          mp3: ["128kbps"]
+          mp4: qualities
         }
       }
-    };
-    console.log("Sending response to client");
-    res.json(response);
+    });
+    
   } catch (error) {
-    console.error("Video info error:", error);
-    res.status(500).json({ error: "Failed to get video info: " + error.message });
+    console.error('Error fetching video info:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
-// Start download
-app.get("/api/start-download", async (req, res) => {
-  console.log("Download request received:", req.query);
-  try {
-    const url = req.query.url;
-    const quality = req.query.quality;
-    if (!ytdl.validateURL(url)) {
-      return res.status(400).json({ error: "Invalid YouTube URL" });
-    }
-
-    const downloadId = Date.now().toString();
-    downloads[downloadId] = {
-      url,
-      quality,
-      progress: 0,
-      status: "starting",
-      download_url: null
-    };
-
-    // Start download process (simplified - you'll need to implement actual file handling)
-    ytdl(url, { quality: quality === "mp3" ? "highestaudio" : quality })
-      .on("progress", (chunkLength, downloaded, total) => {
-        downloads[downloadId].progress = (downloaded / total) * 100;
-      })
-      .on("end", () => {
-        downloads[downloadId].status = "complete";
-        downloads[downloadId].progress = 100;
-        downloads[downloadId].download_url = "https://example.com/download.mp4"; // Replace with actual URL
-      })
-      .on("error", (err) => {
-        downloads[downloadId].status = "error";
-        console.error("Download error:", err);
-      });
-
-    res.json({ download_id: downloadId });
-  } catch (error) {
-    console.error("Start download error:", error);
-    res.status(500).json({ error: "Failed to start download: " + error.message });
-  }
+// Start download endpoint (simplified for testing)
+app.post('/api/start-download', (req, res) => {
+  const { url, quality } = req.body;
+  const downloadId = Date.now().toString(36);
+  
+  // Just return a download ID for now
+  res.json({ download_id: downloadId });
 });
 
-// Get download status
-app.get("/api/get-download", (req, res) => {
-  const downloadId = req.query.download_id;
-  if (!downloads[downloadId]) {
-    return res.status(404).json({ error: "Download not found" });
+// Get download status (simplified for testing)
+app.get('/api/get-download', (req, res) => {
+  const { download_id } = req.query;
+  
+  // Simulate progress
+  const progress = Math.floor(Math.random() * 100);
+  
+  if (progress >= 100) {
+    res.json({ 
+      download_url: `/api/download/${download_id}`,
+      progress: 100
+    });
+  } else {
+    res.json({ progress });
   }
-
-  const download = downloads[downloadId];
-  res.json({
-    progress: download.progress,
-    download_url: download.status === "complete" ? download.download_url : null
-  });
-
-  // Clean up completed downloads
-  if (download.status === "complete") {
-    delete downloads[downloadId];
-  }
-});
-
-// Health check endpoint
-app.get("/health", (req, res) => {
-  res.json({
-    status: "ok",
-    ytdlVersion: ytdl.version,
-    timestamp: new Date().toISOString()
-  });
 });
 
 app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
-  console.log(`ytdl-core version: ${ytdl.version}`);
+  console.log(`Server running on port ${PORT}`);
 });
